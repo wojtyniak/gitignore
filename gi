@@ -42,29 +42,29 @@ show_usage() {
 
 # Function to list all available gitignore templates
 list_templates() {
-    print_color $BLUE "Fetching available gitignore templates..."
+    print_color "$BLUE" "Fetching available gitignore templates..."
     
-    response=$(curl -s "$GITHUB_API_BASE/contents" 2>/dev/null)
-    
-    if [ $? -ne 0 ] || [ -z "$response" ]; then
-        print_color $RED "Error: Failed to fetch template list from GitHub API"
+    if ! response=$(curl -s "$GITHUB_API_BASE/contents" 2>/dev/null); then
+        print_color "$RED" "Error: Failed to fetch template list from GitHub API"
         exit 1
     fi
     
     # Check if response contains error
     if echo "$response" | grep -q '"message"'; then
-        print_color $RED "Error: GitHub API returned an error"
+        print_color "$RED" "Error: GitHub API returned an error"
         echo "$response" | grep '"message"' | sed 's/.*"message": *"\([^"]*\)".*/\1/'
         exit 1
     fi
     
-    print_color $GREEN "Available gitignore templates:"
+    print_color "$GREEN" "Available gitignore templates:"
     
     # Try jq first for better JSON parsing
-    templates=$(echo "$response" | jq -r '.[] | select(.name | endswith(".gitignore")) | .name' 2>/dev/null | sort)
+    if ! templates=$(echo "$response" | jq -r '.[] | select(.name | endswith(".gitignore")) | .name' 2>/dev/null | sort); then
+        templates=""
+    fi
     
     # Fallback to regex if jq is not available
-    if [ $? -ne 0 ] || [ -z "$templates" ]; then
+    if [ -z "$templates" ]; then
         templates=$(echo "$response" | grep -E '"name":\s*"[^"]*\.gitignore"' | sed -E 's/.*"name":\s*"([^"]*\.gitignore)".*/\1/g' | sort)
     fi
     
@@ -79,13 +79,13 @@ ask_confirmation() {
     # Extract friendly name for display
     friendly_name=$(echo "$template_name" | sed -E 's/\.[gG][iI][tT][iI][gG][nN][oO][rR][eE]$//')
     
-    print_color $YELLOW "Found exact match: $friendly_name"
+    print_color "$YELLOW" "Found exact match: $friendly_name"
     echo -n "Do you want to append this template to '$target_file'? [Y/n]: "
     read -r response
     
     case "$response" in
         [nN][oO]|[nN])
-            print_color $BLUE "Operation cancelled."
+            print_color "$BLUE" "Operation cancelled."
             return 1
             ;;
         *)
@@ -93,26 +93,27 @@ ask_confirmation() {
             ;;
     esac
 }
+
 # Function to search for templates and handle smart default behavior
 search_templates() {
     local search_term=$1
     local auto_confirm=$2
     local target_file=$3
     
-    print_color $BLUE "Searching for templates containing '$search_term'..."
+    print_color "$BLUE" "Searching for templates containing '$search_term'..."
     
-    response=$(curl -s "$GITHUB_API_BASE/contents" 2>/dev/null)
-    
-    if [ $? -ne 0 ] || [ -z "$response" ]; then
-        print_color $RED "Error: Failed to fetch template list from GitHub API"
+    if ! response=$(curl -s "$GITHUB_API_BASE/contents" 2>/dev/null); then
+        print_color "$RED" "Error: Failed to fetch template list from GitHub API"
         exit 1
     fi
     
     # Extract .gitignore files from JSON response
-    all_files=$(echo "$response" | jq -r '.[] | select(.name | endswith(".gitignore")) | .name' 2>/dev/null)
+    if ! all_files=$(echo "$response" | jq -r '.[] | select(.name | endswith(".gitignore")) | .name' 2>/dev/null); then
+        all_files=""
+    fi
     
     # Fallback to regex if jq is not available
-    if [ $? -ne 0 ] || [ -z "$all_files" ]; then
+    if [ -z "$all_files" ]; then
         all_files=$(echo "$response" | grep -E '"name":\s*"[^"]*\.gitignore"' | sed -E 's/.*"name":\s*"([^"]*\.gitignore)".*/\1/g')
     fi
     
@@ -124,15 +125,15 @@ search_templates() {
     matches=$(echo "$all_files" | grep -i "$search_term")
     
     if [ -z "$matches" ]; then
-        print_color $YELLOW "No templates found containing '$search_term'"
-        print_color $BLUE "Trying fuzzy search..."
+        print_color "$YELLOW" "No templates found containing '$search_term'"
+        print_color "$BLUE" "Trying fuzzy search..."
         # Try a broader search including the base name without .gitignore
         fuzzy_matches=$(echo "$all_files" | sed 's/\.gitignore$//' | grep -i "$search_term" | sed 's/$/.gitignore/')
         if [ -n "$fuzzy_matches" ]; then
-            print_color $GREEN "Found similar templates:"
+            print_color "$GREEN" "Found similar templates:"
             echo "$fuzzy_matches"
         else
-            print_color $YELLOW "No similar templates found. Try '$0 --list' to see all available templates."
+            print_color "$YELLOW" "No similar templates found. Try '$0 --list' to see all available templates."
         fi
         return 1
     fi
@@ -146,8 +147,8 @@ search_templates() {
         
         if [ "$auto_confirm" = "true" ]; then
             friendly_name=$(echo "$template_name" | sed -E 's/\.[gG][iI][tT][iI][gG][nN][oO][rR][eE]$//')
-            print_color $GREEN "Found exact match: $friendly_name"
-            print_color $BLUE "Auto-confirming append operation..."
+            print_color "$GREEN" "Found single match: $friendly_name"
+            print_color "$BLUE" "Auto-confirming append operation..."
             append_template "$template_name" "$target_file"
         else
             if ask_confirmation "$template_name" "$target_file"; then
@@ -167,7 +168,7 @@ search_templates() {
         done <<< "$matches"
         
         # Show all matches first for context
-        print_color $GREEN "Found $match_count templates matching '$search_term':"
+        print_color "$GREEN" "Found $match_count templates matching '$search_term':"
         echo "$matches"
         echo ""
         
@@ -175,8 +176,8 @@ search_templates() {
             # Found exact match among multiple results
             if [ "$auto_confirm" = "true" ]; then
                 friendly_name=$(echo "$exact_match" | sed -E 's/\.[gG][iI][tT][iI][gG][nN][oO][rR][eE]$//')
-                print_color $GREEN "Found single match: $friendly_name"
-                print_color $BLUE "Auto-confirming append operation..."
+                print_color "$GREEN" "Found single match: $friendly_name"
+                print_color "$BLUE" "Auto-confirming append operation..."
                 append_template "$exact_match" "$target_file"
             else
                 if ask_confirmation "$exact_match" "$target_file"; then
@@ -185,7 +186,7 @@ search_templates() {
             fi
         else
             # Multiple matches, no exact match - just show them
-            print_color $BLUE "Use '$0 <template_name>' to add a specific template"
+            print_color "$BLUE" "Use '$0 <template_name>' to add a specific template"
         fi
     fi
 }
@@ -206,30 +207,29 @@ append_template() {
     # Extract the friendly name (without .gitignore) for display
     friendly_name=$(echo "$template_name" | sed -E 's/\.[gG][iI][tT][iI][gG][nN][oO][rR][eE]$//')
     
-    print_color $BLUE "Fetching $friendly_name template..."
+    print_color "$BLUE" "Fetching $friendly_name template..."
     
     # Get the raw content URL
     content_url="https://raw.githubusercontent.com/github/gitignore/main/$template_name"
     
     # Fetch the template content
-    template_content=$(curl -s "$content_url" 2>/dev/null)
-    
-    if [ $? -ne 0 ]; then
-        print_color $RED "Error: Failed to fetch template '$template_name'"
+    if ! template_content=$(curl -s "$content_url" 2>/dev/null); then
+        print_color "$RED" "Error: Failed to fetch template '$template_name'"
         exit 1
     fi
     
     # Check if template exists (GitHub returns 404 page for non-existent files)
     if echo "$template_content" | grep -q "404: Not Found"; then
-        print_color $RED "Error: $friendly_name template not found"
-        print_color $YELLOW "Try running '$0 --list' to see available templates"
+        print_color "$RED" "Error: $friendly_name template not found"
+        print_color "$YELLOW" "Try running '$0 --list' to see available templates"
         exit 1
     fi
     
     # Create backup of existing .gitignore if it exists
     if [ -f "$target_file" ]; then
-        cp "$target_file" "${target_file}.backup.$(date +%Y%m%d_%H%M%S)"
-        print_color $YELLOW "Backup created: ${target_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        backup_name="${target_file}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$target_file" "$backup_name"
+        print_color "$YELLOW" "Backup created: $backup_name"
     fi
     
     # Append template to .gitignore
@@ -242,7 +242,7 @@ append_template() {
         echo "$template_content"
     } >> "$target_file"
     
-    print_color $GREEN "Successfully appended $friendly_name template to '$target_file'"
+    print_color "$GREEN" "Successfully appended $friendly_name template to '$target_file'"
 }
 
 # Parse command line arguments
@@ -257,7 +257,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -s|--search)
             if [ -z "$2" ]; then
-                print_color $RED "Error: --search requires a search term"
+                print_color "$RED" "Error: --search requires a search term"
                 show_usage
                 exit 1
             fi
@@ -270,7 +270,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         -f|--file)
             if [ -z "$2" ]; then
-                print_color $RED "Error: --file requires a file path"
+                print_color "$RED" "Error: --file requires a file path"
                 show_usage
                 exit 1
             fi
@@ -282,7 +282,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         -*)
-            print_color $RED "Error: Unknown option $1"
+            print_color "$RED" "Error: Unknown option $1"
             show_usage
             exit 1
             ;;
