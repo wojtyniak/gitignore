@@ -225,12 +225,6 @@ append_template() {
         exit 1
     fi
     
-    # Create backup of existing .gitignore if it exists
-    if [ -f "$target_file" ]; then
-        backup_name="${target_file}.backup.$(date +%Y%m%d_%H%M%S)"
-        cp "$target_file" "$backup_name"
-        print_color "$YELLOW" "Backup created: $backup_name"
-    fi
     
     # Append template to .gitignore
     {
